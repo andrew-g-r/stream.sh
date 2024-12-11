@@ -12,6 +12,7 @@ Using nginx and the rtmp module to allow for ffmpeg to stream to multiple subscr
 
 * nginx web server
 * rtmp enabled nginx
+* ffmpeg
 
 ### configuring nginx
 
