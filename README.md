@@ -6,7 +6,13 @@ a script for passing media files to ffmpeg for streaming
 
 Using nginx and the rtmp module to allow for ffmpeg to stream to multiple subscribers
 
-## Getting Started
+## Using the script
+
+* place script in the media directory
+* example usage:
+```
+./stream.sh --start_time 00:00:05 --volume +10 --search demo.mp4
+```
 
 ### Dependencies
 
