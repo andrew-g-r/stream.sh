@@ -76,7 +76,6 @@ fi
 echo "Enter the number of the file you want to play:  'quit' to exit"
 
 PS3="Your choice: "
-QUIT="QUIT THIS PROGRAM"
 touch "$QUIT"
 work_dir=${PWD}
 
