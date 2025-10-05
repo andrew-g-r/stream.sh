@@ -1,157 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Stream local media with Bash 3.2+ and FFmpeg.
+set -eo pipefail
 
-# @Description: sort video files and pass parameters to ffmpeg
-# start_time, search
-##
-
-function show_usage (){
-    printf "Usage: $0 [options [parameters]]\n"
-    printf "\n"
-    printf "Options:\n"
-    printf " -s|--search [string], return items with string\n"
-    printf " -t|--start_time, specify starting time\n"
-    printf " -v|--volume, boost or reduce volume ie +10dB -10 dB \n"
-    printf " -h|--help, Print help\n"
-
-return 0
+usage() {
+    cat <<'HELP'
+Usage: stream.sh [options]
+  -f, --file PATH          Stream one local media file
+  -s, --search TEXT        Filter the interactive file picker
+  -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
+  -v, --volume DB          Audio gain in dB (default 0)
+  -h, --help               Show this help
+HELP
 }
 
-#if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]];then
-#    show_usage
-#else
-#    echo "Incorrect input provided"
-#    show_usage
-#fi
-
-optstring=":vts:"
-
-while [ ! -z "$1" ]
-do
+die() { printf 'stream.sh: %s\n' "$*" >&2; exit 2; }
+need_value() { [[ -n "${2-}" ]] || die "$1 requires a value"; }
+file=''
+search=''
+start_time='0'
+volume='0'
+media_dir='.'
+while [[ $# -gt 0 ]]; do
     case "$1" in
-        --volume|-v)
-            shift
-            echo "setting volume for $1"
-            volume=$1
-            ;;
-        --start_time|-t)
-            shift
-            echo "start time set to: $1"
-	        start_time=$1
-            ;;
-        --search|-s)
-            shift
-            echo "searching for: $1"
-	        search=$1
-            ;;
-        :)
-            ;;
-        *)
-            show_usage
-            ;;
-    esac
-shift
-done
-
-
-echo "${start_time}"
-
-if [ ! -n "$start_time" ]
-then
-        start_time="0:00:00"
-        echo "Default: start time "$start_time""
-fi
-
-if [ ! -n "$search" ]
-then
-        search=""
-        echo "Default: no search"
-fi
-
-if [ ! -n "$volume" ]
-then
-        volume="0"
-        echo "Default: 0dB adjustment"
-fi
-
-echo "Enter the number of the file you want to play:  'quit' to exit"
-
-PS3="Your choice: "
-touch "$QUIT"
-work_dir=${PWD}
-
-#declare -a media_list=("")
-#for entry in "$work_dir"/* "$work_dir"/**/* "$work_dir"/**/**/*
-#do
-#    if [[ "$entry" == *".mkv" ]] || [[ "$entry" == *".mp4" ]] || [[ "$entry" == *".avi" ]]
-#    then
-#        media_list+=("$entry")
-##        echo "$entry"
-#    fi
-#done
-
-#make a list of the media
-declare -a media_list=("")
-for entry in "$work_dir"/*
-do
-    if [[ "$entry" = *".mkv" ]] || [[ "$entry" = *".mp4" ]] || [[ "$entry" = *".avi" ]]
-    then
-        media_list+=("$entry")
-        #echo "$entry"
-    fi
-    if [ -d "$entry" ]
-    then
-        for sub_entry in "$entry"/*
-        do
-#media types
-            if [[ "$sub_entry" = *".mkv" ]] || [[ "$sub_entry" = *".mp4" ]] || [[ "$sub_entry" = *".avi" ]]
-                then
-                    media_list+=("$sub_entry")
-                    #echo "$sub_entry"
-            fi
-        done
-    fi
-done
-
-#compare list items for search terms
-declare -a final_list=("")
-for value in "${media_list[@]}"
-do
-    if [[ "${value,,}" == *"${search,,}"* ]]
-    then
-	    final_list+=("$value")
-    else
-	    continue
-    fi
-done
-
-#echo $final_list
-
-select FILENAME in ${final_list[@]} quit;
-do
-    case $FILENAME in
-        quit)
-          break
-          return
-          ;;
-        *)
-          rm "$QUIT"
-          echo "You picked $FILENAME ($REPLY)"
-          ffmpeg \
-          -ss "$start_time" \
-          -re \
-          -i "$FILENAME" \
-          -vcodec libx264 \
-          -preset:v medium \
-          -r 30 \
-          -g 60 \
-          -keyint_min 60 \
-          -sc_threshold 0 \
-          -b:v 2500k \
-          -maxrate 2500k \
-          -bufsize 2500k \
-          -filter:a volume="$volume"dB \
-          -f flv rtmp://localhost/live_stream
-	      break
-          ;;
+        -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
+        -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
+        -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
+        -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        --) shift; [[ $# -eq 1 ]] || die 'Expected one file after --'; file=$1; shift ;;
+        *) die "Unknown option: $1 (see --help)" ;;
     esac
 done
+
+files=()
+collect_files() {
+    local candidate
+    for candidate in "$media_dir"/*; do
+        [[ -f "$candidate" ]] || continue
+        case "$candidate" in *.mp4|*.mkv|*.avi) files+=("$candidate") ;; esac
+    done
+}
+if [[ -z "$file" ]]; then
+    collect_files
+    [[ ${#files[@]} -gt 0 ]] || die 'No matching media files found'
+    [[ -t 0 ]] || die 'Use --file for noninteractive streaming'
+    PS3='Choose a file (or quit): '
+    select selection in "${files[@]}" quit; do
+        [[ "$selection" == quit ]] && exit 0
+        if [[ -n "$selection" ]]; then file=$selection; break; fi
+        printf 'Choose a listed number.\n' >&2
+    done
+fi
+[[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
+file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+command -v ffmpeg >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+command_args=(-hide_banner -nostdin -re -ss "$start_time" -i "$file"
+    -c:v libx264 -preset medium -r 30 -g 60 -keyint_min 60 -sc_threshold 0
+    -b:v 2500k -maxrate 2500k -bufsize 5000k -af "volume=${volume}dB"
+    -c:a aac -b:a 128k -f flv rtmp://127.0.0.1/live_stream/main)
+exec ffmpeg "${command_args[@]}"
