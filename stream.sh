@@ -9,6 +9,8 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --directory PATH    Browse this directory (default current directory)
+      --recursive         Include subdirectories, without following symlinks
   -h, --help               Show this help
 HELP
 }
@@ -20,12 +22,15 @@ search=''
 start_time='0'
 volume='0'
 media_dir='.'
+recursive=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --directory) need_value "$1" "${2-}"; media_dir=$2; shift 2 ;;
+        --recursive) recursive=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; [[ $# -eq 1 ]] || die 'Expected one file after --'; file=$1; shift ;;
         *) die "Unknown option: $1 (see --help)" ;;
@@ -34,12 +39,16 @@ done
 
 files=()
 collect_files() {
-    local candidate
-    for candidate in "$media_dir"/*; do
-        [[ -f "$candidate" ]] || continue
-        case "$candidate" in *.mp4|*.mkv|*.avi) files+=("$candidate") ;; esac
+    local directory=${1:-$media_dir} candidate
+    for candidate in "$directory"/*; do
+        if [[ -d "$candidate" && ! -L "$candidate" && "$recursive" -eq 1 ]]; then
+            collect_files "$candidate"
+        elif [[ -f "$candidate" ]]; then
+            case "$candidate" in *.mp4|*.mkv|*.avi) files+=("$candidate") ;; esac
+        fi
     done
 }
+[[ -d "$media_dir" ]] || die 'Media directory does not exist'
 if [[ -z "$file" ]]; then
     collect_files
     [[ ${#files[@]} -gt 0 ]] || die 'No matching media files found'
