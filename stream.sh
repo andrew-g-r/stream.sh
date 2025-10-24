@@ -44,9 +44,17 @@ collect_files() {
         if [[ -d "$candidate" && ! -L "$candidate" && "$recursive" -eq 1 ]]; then
             collect_files "$candidate"
         elif [[ -f "$candidate" ]]; then
-            case "$candidate" in *.mp4|*.mkv|*.avi) files+=("$candidate") ;; esac
+            local lower_candidate lower_search
+            lower_candidate=$(printf '%s' "$candidate" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+            lower_search=$(printf '%s' "$search" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+            case "$lower_candidate" in
+                *.mp4|*.mkv|*.avi|*.mov|*.webm|*.m4v)
+                    [[ "$lower_candidate" == *"$lower_search"* ]] && files+=("$candidate")
+                    ;;
+            esac
         fi
     done
+    return 0
 }
 [[ -d "$media_dir" ]] || die 'Media directory does not exist'
 if [[ -z "$file" ]]; then
