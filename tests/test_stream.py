@@ -24,6 +24,13 @@ class StreamTests(unittest.TestCase):
     def arguments(self,result):
         self.assertEqual(result.returncode,0,result.stderr)
         return json.loads(result.stdout)
+    def test_recursive_case_insensitive_search_and_nul_listing(self):
+        sub=self.root/'sub';sub.mkdir()
+        wanted=sub/'DEMO clip.MKV';wanted.touch()
+        (sub/'loop').symlink_to(self.root,target_is_directory=True)
+        result=self.run_stream('--list','--recursive','--search','demo','--null')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,'./sub/DEMO clip.MKV\0')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

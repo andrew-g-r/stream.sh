@@ -9,6 +9,8 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --list              List matching media without streaming
+      --null              Separate --list results with NUL for scripts
       --directory PATH    Browse this directory (default current directory)
       --recursive         Include subdirectories, without following symlinks
   -h, --help               Show this help
@@ -23,12 +25,16 @@ start_time='0'
 volume='0'
 media_dir='.'
 recursive=0
+list_only=0
+null_output=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --list) list_only=1; shift ;;
+        --null) null_output=1; shift ;;
         --directory) need_value "$1" "${2-}"; media_dir=$2; shift 2 ;;
         --recursive) recursive=1; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -57,6 +63,13 @@ collect_files() {
     return 0
 }
 [[ -d "$media_dir" ]] || die 'Media directory does not exist'
+if [[ "$list_only" -eq 1 ]]; then
+    collect_files
+    if [[ ${#files[@]} -gt 0 ]]; then
+        if [[ "$null_output" -eq 1 ]]; then printf '%s\0' "${files[@]}"; else printf '%s\n' "${files[@]}"; fi
+    fi
+    exit 0
+fi
 if [[ -z "$file" ]]; then
     collect_files
     [[ ${#files[@]} -gt 0 ]] || die 'No matching media files found'
