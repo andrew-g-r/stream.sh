@@ -9,6 +9,7 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --dry-run           Print the shell-escaped FFmpeg command without running it
       --output TARGET     RTMP/RTMPS URL or local .flv file (or STREAM_URL)
       --list              List matching media without streaming
       --null              Separate --list results with NUL for scripts
@@ -27,6 +28,7 @@ volume='0'
 media_dir='.'
 recursive=0
 list_only=0
+dry_run=0
 null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --dry-run) dry_run=1; shift ;;
         --output) need_value "$1" "${2-}"; output=$2; shift 2 ;;
         --list) list_only=1; shift ;;
         --null) null_output=1; shift ;;
@@ -96,4 +99,9 @@ command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
     -c:v libx264 -preset medium -r 30 -g 60 -keyint_min 60 -sc_threshold 0
     -b:v 2500k -maxrate 2500k -bufsize 5000k -af "volume=${volume}dB"
     -c:a aac -b:a 128k -f flv "$output")
+if [[ "$dry_run" -eq 1 ]]; then
+    printf '%q ' ffmpeg "${command_args[@]}"
+    printf '\n'
+    exit 0
+fi
 exec ffmpeg "${command_args[@]}"

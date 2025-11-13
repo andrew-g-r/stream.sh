@@ -35,6 +35,13 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--output','rtmps://example.test/live/key'))
         self.assertEqual(args[-1],'rtmps://example.test/live/key')
         self.assertEqual(self.run_stream('--file',self.media,'--output','https://example.test').returncode,2)
+    def test_dry_run_preserves_shell_metacharacters(self):
+        import shlex
+        weird=self.root/'a;$(whoami) clip.mp4';weird.touch()
+        result=self.run_stream('--file',weird,'--dry-run')
+        self.assertEqual(result.returncode,0,result.stderr)
+        args=shlex.split(result.stdout)
+        self.assertEqual(args[args.index('-i')+1],str(weird))
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
