@@ -42,6 +42,11 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         args=shlex.split(result.stdout)
         self.assertEqual(args[args.index('-i')+1],str(weird))
+    def test_missing_ffmpeg_is_actionable(self):
+        self.env['FFMPEG_BIN']=str(self.root/'missing')
+        result=self.run_stream('--file',self.media)
+        self.assertEqual(result.returncode,2)
+        self.assertIn('FFmpeg is required',result.stderr)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

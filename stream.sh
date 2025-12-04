@@ -29,6 +29,7 @@ media_dir='.'
 recursive=0
 list_only=0
 dry_run=0
+ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
 null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
@@ -94,14 +95,14 @@ case "$output" in
     *.flv) [[ "$output" != -* && "$output" != *://* ]] || die 'Unsupported output target' ;;
     *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
 esac
-command -v ffmpeg >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
     -c:v libx264 -preset medium -r 30 -g 60 -keyint_min 60 -sc_threshold 0
     -b:v 2500k -maxrate 2500k -bufsize 5000k -af "volume=${volume}dB"
     -c:a aac -b:a 128k -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
-    printf '%q ' ffmpeg "${command_args[@]}"
+    printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
     printf '\n'
     exit 0
 fi
-exec ffmpeg "${command_args[@]}"
+exec "$ffmpeg_bin" "${command_args[@]}"
