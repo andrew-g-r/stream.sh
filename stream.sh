@@ -50,6 +50,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+valid_time() {
+    [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ || "$1" =~ ^[0-9]+:[0-5][0-9]:[0-5][0-9]([.][0-9]+)?$ ]]
+}
+valid_time "$start_time" || die 'Start time must be nonnegative seconds or HH:MM:SS'
 files=()
 collect_files() {
     local directory=${1:-$media_dir} candidate

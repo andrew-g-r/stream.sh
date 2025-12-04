@@ -47,6 +47,11 @@ class StreamTests(unittest.TestCase):
         result=self.run_stream('--file',self.media)
         self.assertEqual(result.returncode,2)
         self.assertIn('FFmpeg is required',result.stderr)
+    def test_seek_validation_and_legacy_option(self):
+        self.assertEqual(self.run_stream('--file',self.media,'--start-time','1:90:00').returncode,2)
+        args=self.arguments(self.run_stream('--file',self.media,'--start_time','00:00:05.5'))
+        self.assertLess(args.index('-ss'),args.index('-i'))
+        self.assertEqual(args[args.index('-ss')+1],'00:00:05.5')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
