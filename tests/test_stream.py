@@ -52,6 +52,11 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--start_time','00:00:05.5'))
         self.assertLess(args.index('-ss'),args.index('-i'))
         self.assertEqual(args[args.index('-ss')+1],'00:00:05.5')
+    def test_volume_validation_prevents_filter_injection(self):
+        for volume in ['9,amix','NaN','100','-80']:
+            self.assertEqual(self.run_stream('--file',self.media,'--volume',volume).returncode,2)
+        args=self.arguments(self.run_stream('--file',self.media,'--volume','-3dB'))
+        self.assertEqual(args[args.index('-af')+1],'volume=-3dB')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

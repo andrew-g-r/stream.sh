@@ -53,6 +53,9 @@ done
 valid_time() {
     [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ || "$1" =~ ^[0-9]+:[0-5][0-9]:[0-5][0-9]([.][0-9]+)?$ ]]
 }
+volume=${volume%dB}
+[[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
+awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
 valid_time "$start_time" || die 'Start time must be nonnegative seconds or HH:MM:SS'
 files=()
 collect_files() {
