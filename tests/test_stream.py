@@ -57,6 +57,11 @@ class StreamTests(unittest.TestCase):
             self.assertEqual(self.run_stream('--file',self.media,'--volume',volume).returncode,2)
         args=self.arguments(self.run_stream('--file',self.media,'--volume','-3dB'))
         self.assertEqual(args[args.index('-af')+1],'volume=-3dB')
+    def test_fps_updates_keyframe_interval(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--fps','24','--bitrate','1500k'))
+        self.assertEqual(args[args.index('-g')+1],'48')
+        self.assertEqual(args[args.index('-b:v')+1],'1500k')
+        self.assertEqual(self.run_stream('--file',self.media,'--fps','0').returncode,2)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

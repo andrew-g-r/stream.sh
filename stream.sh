@@ -10,6 +10,8 @@ Usage: stream.sh [options]
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
       --dry-run           Print the shell-escaped FFmpeg command without running it
+      --fps N             Frame rate, 1–120 (default 30)
+      --bitrate RATE      Video bitrate, e.g. 2500k or 4M
       --output TARGET     RTMP/RTMPS URL or local .flv file (or STREAM_URL)
       --list              List matching media without streaming
       --null              Separate --list results with NUL for scripts
@@ -27,6 +29,8 @@ start_time='0'
 volume='0'
 media_dir='.'
 recursive=0
+fps=30
+bitrate=2500k
 list_only=0
 dry_run=0
 ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
@@ -39,6 +43,8 @@ while [[ $# -gt 0 ]]; do
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
+        --fps) need_value "$1" "${2-}"; fps=$2; shift 2 ;;
+        --bitrate) need_value "$1" "${2-}"; bitrate=$2; shift 2 ;;
         --output) need_value "$1" "${2-}"; output=$2; shift 2 ;;
         --list) list_only=1; shift ;;
         --null) null_output=1; shift ;;
@@ -53,6 +59,8 @@ done
 valid_time() {
     [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ || "$1" =~ ^[0-9]+:[0-5][0-9]:[0-5][0-9]([.][0-9]+)?$ ]]
 }
+[[ "$fps" =~ ^[1-9][0-9]*$ && "$fps" -le 120 ]] || die 'FPS must be an integer from 1 to 120'
+[[ "$bitrate" =~ ^[1-9][0-9]{0,5}[kKmM]$ ]] || die 'Bitrate must be a positive number followed by k or M'
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -104,8 +112,8 @@ case "$output" in
 esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
-    -c:v libx264 -preset medium -r 30 -g 60 -keyint_min 60 -sc_threshold 0
-    -b:v 2500k -maxrate 2500k -bufsize 5000k -af "volume=${volume}dB"
+    -c:v libx264 -preset medium -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate" -af "volume=${volume}dB"
     -c:a aac -b:a 128k -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
