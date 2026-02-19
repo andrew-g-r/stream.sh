@@ -62,6 +62,11 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(args[args.index('-g')+1],'48')
         self.assertEqual(args[args.index('-b:v')+1],'1500k')
         self.assertEqual(self.run_stream('--file',self.media,'--fps','0').returncode,2)
+    def test_encoding_profiles(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--profile','low-latency'))
+        self.assertEqual(args[args.index('-tune')+1],'zerolatency')
+        args=self.arguments(self.run_stream('--file',self.media,'--profile','low-bandwidth'))
+        self.assertEqual(args[args.index('-b:v')+1],'900k')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

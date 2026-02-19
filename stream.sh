@@ -10,6 +10,8 @@ Usage: stream.sh [options]
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
       --dry-run           Print the shell-escaped FFmpeg command without running it
+      --profile NAME      standard, low-bandwidth, or low-latency
+      --preset NAME       x264 encoding preset (default medium)
       --fps N             Frame rate, 1–120 (default 30)
       --bitrate RATE      Video bitrate, e.g. 2500k or 4M
       --output TARGET     RTMP/RTMPS URL or local .flv file (or STREAM_URL)
@@ -31,6 +33,8 @@ media_dir='.'
 recursive=0
 fps=30
 bitrate=2500k
+preset=medium
+profile=standard
 list_only=0
 dry_run=0
 ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
@@ -43,6 +47,8 @@ while [[ $# -gt 0 ]]; do
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
+        --profile) need_value "$1" "${2-}"; profile=$2; shift 2 ;;
+        --preset) need_value "$1" "${2-}"; preset=$2; shift 2 ;;
         --fps) need_value "$1" "${2-}"; fps=$2; shift 2 ;;
         --bitrate) need_value "$1" "${2-}"; bitrate=$2; shift 2 ;;
         --output) need_value "$1" "${2-}"; output=$2; shift 2 ;;
@@ -56,6 +62,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "$profile" in
+    standard) ;;
+    low-bandwidth) bitrate=900k; fps=24 ;;
+    low-latency) preset=veryfast ;;
+    *) die 'Profile must be standard, low-bandwidth, or low-latency' ;;
+esac
+case "$preset" in ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow) ;; *) die 'Unknown x264 preset' ;; esac
 valid_time() {
     [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ || "$1" =~ ^[0-9]+:[0-5][0-9]:[0-5][0-9]([.][0-9]+)?$ ]]
 }
@@ -111,8 +124,10 @@ case "$output" in
     *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
 esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+tune_args=()
+[[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
-    -c:v libx264 -preset medium -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate" -af "volume=${volume}dB"
     -c:a aac -b:a 128k -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
