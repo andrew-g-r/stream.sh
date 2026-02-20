@@ -71,6 +71,10 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--duration','3.5'))
         self.assertGreater(args.index('-t'),args.index('-i'))
         self.assertEqual(args[args.index('-t')+1],'3.5')
+    def test_optional_audio_and_compatible_pixel_format(self):
+        args=self.arguments(self.run_stream('--file',self.media))
+        self.assertIn('0:a:0?',args)
+        self.assertEqual(args[args.index('-pix_fmt')+1],'yuv420p')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

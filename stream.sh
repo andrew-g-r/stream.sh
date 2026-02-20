@@ -133,7 +133,7 @@ duration_args=()
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
-    -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -map 0:v:0 -map '0:a:0?' -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate" -af "volume=${volume}dB"
     -c:a aac -b:a 128k "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
