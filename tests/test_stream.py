@@ -67,6 +67,10 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(args[args.index('-tune')+1],'zerolatency')
         args=self.arguments(self.run_stream('--file',self.media,'--profile','low-bandwidth'))
         self.assertEqual(args[args.index('-b:v')+1],'900k')
+    def test_duration_is_an_output_option(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--duration','3.5'))
+        self.assertGreater(args.index('-t'),args.index('-i'))
+        self.assertEqual(args[args.index('-t')+1],'3.5')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

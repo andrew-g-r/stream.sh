@@ -7,6 +7,7 @@ usage() {
 Usage: stream.sh [options]
   -f, --file PATH          Stream one local media file
   -s, --search TEXT        Filter the interactive file picker
+      --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
       --dry-run           Print the shell-escaped FFmpeg command without running it
@@ -28,6 +29,7 @@ need_value() { [[ -n "${2-}" ]] || die "$1 requires a value"; }
 file=''
 search=''
 start_time='0'
+duration=''
 volume='0'
 media_dir='.'
 recursive=0
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
+        --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
@@ -77,6 +80,7 @@ valid_time() {
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
+[[ -z "$duration" ]] || valid_time "$duration" || die 'Duration must be nonnegative seconds or HH:MM:SS'
 valid_time "$start_time" || die 'Start time must be nonnegative seconds or HH:MM:SS'
 files=()
 collect_files() {
@@ -124,12 +128,14 @@ case "$output" in
     *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
 esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+duration_args=()
+[[ -z "$duration" ]] || duration_args=(-t "$duration")
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
     -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate" -af "volume=${volume}dB"
-    -c:a aac -b:a 128k -f flv "$output")
+    -c:a aac -b:a 128k "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
     printf '\n'
