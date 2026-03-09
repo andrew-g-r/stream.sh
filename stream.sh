@@ -7,6 +7,8 @@ usage() {
 Usage: stream.sh [options]
   -f, --file PATH          Stream one local media file
   -s, --search TEXT        Filter the interactive file picker
+      --audio-bitrate RATE  AAC bitrate (default 128k)
+      --mute              Omit audio from the output
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
@@ -31,6 +33,8 @@ search=''
 start_time='0'
 duration=''
 volume='0'
+audio_bitrate=128k
+mute=0
 media_dir='.'
 recursive=0
 fps=30
@@ -46,6 +50,8 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
+        --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
+        --mute) mute=1; shift ;;
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
@@ -77,6 +83,7 @@ valid_time() {
 }
 [[ "$fps" =~ ^[1-9][0-9]*$ && "$fps" -le 120 ]] || die 'FPS must be an integer from 1 to 120'
 [[ "$bitrate" =~ ^[1-9][0-9]{0,5}[kKmM]$ ]] || die 'Bitrate must be a positive number followed by k or M'
+[[ "$audio_bitrate" =~ ^[1-9][0-9]{0,3}k$ ]] || die 'Audio bitrate must be a positive integer followed by k'
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -128,14 +135,16 @@ case "$output" in
     *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
 esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+audio_args=(-map '0:a:0?' -af "volume=${volume}dB" -c:a aac -b:a "$audio_bitrate")
+[[ "$mute" -eq 0 ]] || audio_args=(-an)
 duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
 command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
-    -map 0:v:0 -map '0:a:0?' -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
-    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate" -af "volume=${volume}dB"
-    -c:a aac -b:a 128k "${duration_args[@]}" -f flv "$output")
+    -map 0:v:0 -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate"
+    "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
     printf '\n'

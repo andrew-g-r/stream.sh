@@ -75,6 +75,10 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media))
         self.assertIn('0:a:0?',args)
         self.assertEqual(args[args.index('-pix_fmt')+1],'yuv420p')
+    def test_muting_omits_audio_filters(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--mute'))
+        self.assertIn('-an',args)
+        self.assertNotIn('-af',args)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
