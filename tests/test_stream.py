@@ -79,6 +79,10 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--mute'))
         self.assertIn('-an',args)
         self.assertNotIn('-af',args)
+    def test_loop_is_an_input_option(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--loop','2'))
+        self.assertLess(args.index('-stream_loop'),args.index('-i'))
+        self.assertEqual(args[args.index('-stream_loop')+1],'2')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

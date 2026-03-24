@@ -8,6 +8,7 @@ Usage: stream.sh [options]
   -f, --file PATH          Stream one local media file
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
+      --loop N            Repeat input N times; -1 loops until interrupted
       --mute              Omit audio from the output
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
@@ -35,6 +36,7 @@ duration=''
 volume='0'
 audio_bitrate=128k
 mute=0
+loop_count=0
 media_dir='.'
 recursive=0
 fps=30
@@ -51,6 +53,7 @@ while [[ $# -gt 0 ]]; do
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
+        --loop) need_value "$1" "${2-}"; loop_count=$2; shift 2 ;;
         --mute) mute=1; shift ;;
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
@@ -84,6 +87,7 @@ valid_time() {
 [[ "$fps" =~ ^[1-9][0-9]*$ && "$fps" -le 120 ]] || die 'FPS must be an integer from 1 to 120'
 [[ "$bitrate" =~ ^[1-9][0-9]{0,5}[kKmM]$ ]] || die 'Bitrate must be a positive number followed by k or M'
 [[ "$audio_bitrate" =~ ^[1-9][0-9]{0,3}k$ ]] || die 'Audio bitrate must be a positive integer followed by k'
+[[ "$loop_count" == -1 || "$loop_count" =~ ^[0-9]{1,6}$ ]] || die 'Loop count must be -1 or a nonnegative integer up to 999999'
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -141,7 +145,7 @@ duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
-command_args=(-hide_banner -nostdin -n -re -ss "$start_time" -i "$file"
+command_args=(-hide_banner -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
     -map 0:v:0 -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate"
     "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
