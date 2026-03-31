@@ -5,6 +5,7 @@ set -eo pipefail
 usage() {
     cat <<'HELP'
 Usage: stream.sh [options]
+      --playlist PATH     Stream a UTF-8 M3U playlist of local files
   -f, --file PATH          Stream one local media file
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
@@ -30,6 +31,7 @@ HELP
 die() { printf 'stream.sh: %s\n' "$*" >&2; exit 2; }
 need_value() { [[ -n "${2-}" ]] || die "$1 requires a value"; }
 file=''
+playlist=''
 search=''
 start_time='0'
 duration=''
@@ -50,6 +52,7 @@ null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --playlist) need_value "$1" "${2-}"; playlist=$2; shift 2 ;;
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
@@ -120,7 +123,24 @@ if [[ "$list_only" -eq 1 ]]; then
     fi
     exit 0
 fi
-if [[ -z "$file" ]]; then
+if [[ -n "$playlist" ]]; then
+    [[ -z "$file" ]] || die '--playlist and --file are mutually exclusive'
+    [[ -r "$playlist" && -f "$playlist" ]] || die 'Playlist is not a readable file'
+    playlist_dir=$(cd "$(dirname "$playlist")" && pwd)
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=${line%$'\r'}
+        line=${line#$'\xef\xbb\xbf'}
+        [[ -n "$line" && "$line" != \#* ]] || continue
+        [[ "$line" != *://* ]] || die 'Playlists support local files only'
+        [[ "$line" == /* ]] || line="$playlist_dir/$line"
+        [[ -f "$line" && -r "$line" ]] || die "Playlist file is missing or unreadable: $line"
+        files+=("$line")
+        [[ ${#files[@]} -le 10000 ]] || die 'Playlist exceeds 10000 entries'
+    done < "$playlist"
+    [[ ${#files[@]} -gt 0 ]] || die 'Playlist contains no media files'
+elif [[ -n "$file" ]]; then
+    files=("$file")
+else
     collect_files
     [[ ${#files[@]} -gt 0 ]] || die 'No matching media files found'
     [[ -t 0 ]] || die 'Use --file for noninteractive streaming'
@@ -130,7 +150,10 @@ if [[ -z "$file" ]]; then
         if [[ -n "$selection" ]]; then file=$selection; break; fi
         printf 'Choose a listed number.\n' >&2
     done
+    files=("$file")
 fi
+[[ "$loop_count" != -1 || ${#files[@]} -eq 1 ]] || die 'An infinite loop cannot advance through a playlist'
+for file in "${files[@]}"; do
 [[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
 file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
 case "$output" in
@@ -152,6 +175,7 @@ command_args=(-hide_banner -nostdin -n -stream_loop "$loop_count" -re -ss "$star
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
     printf '\n'
-    exit 0
+    continue
 fi
-exec "$ffmpeg_bin" "${command_args[@]}"
+"$ffmpeg_bin" "${command_args[@]}"
+done

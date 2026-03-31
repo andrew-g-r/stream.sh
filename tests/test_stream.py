@@ -83,6 +83,14 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--loop','2'))
         self.assertLess(args.index('-stream_loop'),args.index('-i'))
         self.assertEqual(args[args.index('-stream_loop')+1],'2')
+    def test_playlist_resolves_relative_names_and_crlf(self):
+        other=self.root/'second clip.MKV';other.touch()
+        playlist=self.root/'shows.m3u'
+        playlist.write_bytes(b'#EXTM3U\r\na movie.mp4\r\nsecond clip.MKV\r\n')
+        result=self.run_stream('--playlist',playlist)
+        self.assertEqual(result.returncode,0,result.stderr)
+        commands=[json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([args[args.index('-i')+1] for args in commands],[str(self.media),str(other)])
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
