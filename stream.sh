@@ -5,6 +5,7 @@ set -eo pipefail
 usage() {
     cat <<'HELP'
 Usage: stream.sh [options]
+      --shuffle           Randomize playlist order
       --playlist PATH     Stream a UTF-8 M3U playlist of local files
   -f, --file PATH          Stream one local media file
   -s, --search TEXT        Filter the interactive file picker
@@ -32,6 +33,7 @@ die() { printf 'stream.sh: %s\n' "$*" >&2; exit 2; }
 need_value() { [[ -n "${2-}" ]] || die "$1 requires a value"; }
 file=''
 playlist=''
+shuffle=0
 search=''
 start_time='0'
 duration=''
@@ -52,6 +54,7 @@ null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --shuffle) shuffle=1; shift ;;
         --playlist) need_value "$1" "${2-}"; playlist=$2; shift 2 ;;
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
@@ -153,6 +156,14 @@ else
     files=("$file")
 fi
 [[ "$loop_count" != -1 || ${#files[@]} -eq 1 ]] || die 'An infinite loop cannot advance through a playlist'
+if [[ "$shuffle" -eq 1 ]]; then
+    for ((i=${#files[@]}-1;i>0;i--)); do
+        j=$((RANDOM % (i+1)))
+        temporary=${files[$i]}
+        files[$i]=${files[$j]}
+        files[$j]=$temporary
+    done
+fi
 for file in "${files[@]}"; do
 [[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
 file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
