@@ -91,6 +91,12 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         commands=[json.loads(line) for line in result.stdout.splitlines()]
         self.assertEqual([args[args.index('-i')+1] for args in commands],[str(self.media),str(other)])
+    def test_retry_count_is_bounded_and_failure_is_propagated(self):
+        fake=self.bin/'ffmpeg'
+        fake.write_text('#!/bin/sh\nprintf "attempt\\n"\nexit 7\n');fake.chmod(0o755)
+        result=self.run_stream('--file',self.media,'--retries','2','--retry-delay','0')
+        self.assertEqual(result.returncode,7)
+        self.assertEqual(result.stdout.splitlines(),['attempt']*3)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

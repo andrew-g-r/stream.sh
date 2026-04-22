@@ -5,6 +5,8 @@ set -eo pipefail
 usage() {
     cat <<'HELP'
 Usage: stream.sh [options]
+      --retries N         Retry failed streams up to N times (default 0, max 10)
+      --retry-delay N     Seconds between retries (default 2, max 60)
       --shuffle           Randomize playlist order
       --playlist PATH     Stream a UTF-8 M3U playlist of local files
   -f, --file PATH          Stream one local media file
@@ -34,6 +36,8 @@ need_value() { [[ -n "${2-}" ]] || die "$1 requires a value"; }
 file=''
 playlist=''
 shuffle=0
+retries=0
+retry_delay=2
 search=''
 start_time='0'
 duration=''
@@ -54,6 +58,8 @@ null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --retries) need_value "$1" "${2-}"; retries=$2; shift 2 ;;
+        --retry-delay) need_value "$1" "${2-}"; retry_delay=$2; shift 2 ;;
         --shuffle) shuffle=1; shift ;;
         --playlist) need_value "$1" "${2-}"; playlist=$2; shift 2 ;;
         -f|--file) need_value "$1" "${2-}"; file=$2; shift 2 ;;
@@ -94,6 +100,8 @@ valid_time() {
 [[ "$bitrate" =~ ^[1-9][0-9]{0,5}[kKmM]$ ]] || die 'Bitrate must be a positive number followed by k or M'
 [[ "$audio_bitrate" =~ ^[1-9][0-9]{0,3}k$ ]] || die 'Audio bitrate must be a positive integer followed by k'
 [[ "$loop_count" == -1 || "$loop_count" =~ ^[0-9]{1,6}$ ]] || die 'Loop count must be -1 or a nonnegative integer up to 999999'
+[[ "$retries" =~ ^(0|[1-9][0-9]?)$ && "$retries" -le 10 ]] || die 'Retries must be 0–10'
+[[ "$retry_delay" =~ ^(0|[1-9][0-9]?)$ && "$retry_delay" -le 60 ]] || die 'Retry delay must be 0–60 seconds'
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -188,5 +196,12 @@ if [[ "$dry_run" -eq 1 ]]; then
     printf '\n'
     continue
 fi
-"$ffmpeg_bin" "${command_args[@]}"
+attempt=0
+while true; do
+    if "$ffmpeg_bin" "${command_args[@]}"; then break; else result=$?; fi
+    [[ "$attempt" -lt "$retries" ]] || exit "$result"
+    attempt=$((attempt+1))
+    printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
+    sleep "$retry_delay"
+done
 done
