@@ -97,6 +97,25 @@ class StreamTests(unittest.TestCase):
         result=self.run_stream('--file',self.media,'--retries','2','--retry-delay','0')
         self.assertEqual(result.returncode,7)
         self.assertEqual(result.stdout.splitlines(),['attempt']*3)
+    def test_termination_stops_child_and_skips_retries(self):
+        import signal,time
+        marker=self.root/'started'
+        fake=self.bin/'ffmpeg'
+        fake.write_text(f'#!{sys.executable}\nimport os,time\nfrom pathlib import Path\nPath({str(marker)!r}).write_text(str(os.getpid()))\ntime.sleep(30)\n')
+        fake.chmod(0o755)
+        process=subprocess.Popen(['/bin/bash',str(SCRIPT),'--file',str(self.media),'--retries','3'],cwd=self.root,env=self.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+        try:
+            for _ in range(100):
+                if marker.exists():break
+                time.sleep(.02)
+            self.assertTrue(marker.exists())
+            child=int(marker.read_text())
+            process.send_signal(signal.SIGTERM)
+            process.communicate(timeout=5)
+            self.assertEqual(process.returncode,143)
+            with self.assertRaises(ProcessLookupError):os.kill(child,0)
+        finally:
+            if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.communicate()
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

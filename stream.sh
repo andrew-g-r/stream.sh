@@ -196,9 +196,22 @@ if [[ "$dry_run" -eq 1 ]]; then
     printf '\n'
     continue
 fi
+child=''
+stop_stream() {
+    trap - INT TERM
+    if [[ -n "$child" ]]; then
+        kill -TERM "$child" 2>/dev/null || true
+        wait "$child" 2>/dev/null || true
+    fi
+    exit "$1"
+}
+trap 'stop_stream 130' INT
+trap 'stop_stream 143' TERM
 attempt=0
 while true; do
-    if "$ffmpeg_bin" "${command_args[@]}"; then break; else result=$?; fi
+    "$ffmpeg_bin" "${command_args[@]}" &
+    child=$!
+    if wait "$child"; then child=''; break; else result=$?; child=''; fi
     [[ "$attempt" -lt "$retries" ]] || exit "$result"
     attempt=$((attempt+1))
     printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
