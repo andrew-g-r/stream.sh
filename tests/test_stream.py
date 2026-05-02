@@ -116,6 +116,12 @@ class StreamTests(unittest.TestCase):
             with self.assertRaises(ProcessLookupError):os.kill(child,0)
         finally:
             if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.communicate()
+    def test_probe_does_not_start_ffmpeg(self):
+        probe=self.bin/'ffprobe'
+        probe.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"streams":[]}\'\n');probe.chmod(0o755)
+        result=self.run_stream('--file',self.media,'--probe')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),{'streams':[]})
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

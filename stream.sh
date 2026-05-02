@@ -17,6 +17,7 @@ Usage: stream.sh [options]
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --probe             Show media metadata as JSON without streaming
       --dry-run           Print the shell-escaped FFmpeg command without running it
       --profile NAME      standard, low-bandwidth, or low-latency
       --preset NAME       x264 encoding preset (default medium)
@@ -54,6 +55,8 @@ profile=standard
 list_only=0
 dry_run=0
 ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
+ffprobe_bin=${FFPROBE_BIN:-ffprobe}
+probe_only=0
 null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
@@ -70,6 +73,7 @@ while [[ $# -gt 0 ]]; do
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --probe) probe_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
         --profile) need_value "$1" "${2-}"; profile=$2; shift 2 ;;
         --preset) need_value "$1" "${2-}"; preset=$2; shift 2 ;;
@@ -175,6 +179,11 @@ fi
 for file in "${files[@]}"; do
 [[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
 file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+if [[ "$probe_only" -eq 1 ]]; then
+    command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --probe'
+    "$ffprobe_bin" -v error -show_format -show_streams -of json "$file"
+    continue
+fi
 case "$output" in
     rtmp://*|rtmps://*) [[ "$output" != *$'\n'* && "$output" != *$'\r'* ]] || die 'Output URL contains a newline' ;;
     *.flv) [[ "$output" != -* && "$output" != *://* ]] || die 'Unsupported output target' ;;
