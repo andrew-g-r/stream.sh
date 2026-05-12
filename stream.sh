@@ -17,6 +17,7 @@ Usage: stream.sh [options]
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --doctor            Check Bash, FFmpeg, FFprobe, and H.264 support
       --probe             Show media metadata as JSON without streaming
       --dry-run           Print the shell-escaped FFmpeg command without running it
       --profile NAME      standard, low-bandwidth, or low-latency
@@ -57,6 +58,7 @@ dry_run=0
 ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
 ffprobe_bin=${FFPROBE_BIN:-ffprobe}
 probe_only=0
+doctor=0
 null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
@@ -73,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --doctor) doctor=1; shift ;;
         --probe) probe_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
         --profile) need_value "$1" "${2-}"; profile=$2; shift 2 ;;
@@ -90,6 +93,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$doctor" -eq 1 ]]; then
+    printf 'Bash: %s\n' "$BASH_VERSION"
+    for executable in "$ffmpeg_bin" "$ffprobe_bin"; do
+        command -v "$executable" >/dev/null 2>&1 || die "Missing dependency: $executable"
+        "$executable" -version
+    done
+    encoders=$("$ffmpeg_bin" -hide_banner -encoders 2>/dev/null)
+    [[ "$encoders" == *libx264* ]] || die 'FFmpeg needs the libx264 encoder'
+    printf 'H.264 encoder: available\n'
+    exit 0
+fi
 case "$profile" in
     standard) ;;
     low-bandwidth) bitrate=900k; fps=24 ;;
