@@ -122,6 +122,10 @@ class StreamTests(unittest.TestCase):
         result=self.run_stream('--file',self.media,'--probe')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(json.loads(result.stdout),{'streams':[]})
+    def test_progress_is_machine_readable(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--progress'))
+        self.assertEqual(args[args.index('-progress')+1],'pipe:1')
+        self.assertIn('-nostats',args)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

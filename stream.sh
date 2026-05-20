@@ -17,6 +17,8 @@ Usage: stream.sh [options]
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
   -v, --volume DB          Audio gain in dB (default 0)
+      --log-level LEVEL   quiet, error, warning, info, or debug
+      --progress          Write FFmpeg key=value progress to stdout
       --doctor            Check Bash, FFmpeg, FFprobe, and H.264 support
       --probe             Show media metadata as JSON without streaming
       --dry-run           Print the shell-escaped FFmpeg command without running it
@@ -59,6 +61,8 @@ ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
 ffprobe_bin=${FFPROBE_BIN:-ffprobe}
 probe_only=0
 doctor=0
+log_level=warning
+progress=0
 null_output=0
 output=${STREAM_URL:-rtmp://127.0.0.1/live_stream/main}
 while [[ $# -gt 0 ]]; do
@@ -75,6 +79,8 @@ while [[ $# -gt 0 ]]; do
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
         -v|--volume) need_value "$1" "${2-}"; volume=$2; shift 2 ;;
+        --log-level) need_value "$1" "${2-}"; log_level=$2; shift 2 ;;
+        --progress) progress=1; shift ;;
         --doctor) doctor=1; shift ;;
         --probe) probe_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
@@ -120,6 +126,7 @@ valid_time() {
 [[ "$loop_count" == -1 || "$loop_count" =~ ^[0-9]{1,6}$ ]] || die 'Loop count must be -1 or a nonnegative integer up to 999999'
 [[ "$retries" =~ ^(0|[1-9][0-9]?)$ && "$retries" -le 10 ]] || die 'Retries must be 0–10'
 [[ "$retry_delay" =~ ^(0|[1-9][0-9]?)$ && "$retry_delay" -le 60 ]] || die 'Retry delay must be 0–60 seconds'
+case "$log_level" in quiet|error|warning|info|debug) ;; *) die 'Unsupported log level' ;; esac
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -208,9 +215,11 @@ audio_args=(-map '0:a:0?' -af "volume=${volume}dB" -c:a aac -b:a "$audio_bitrate
 [[ "$mute" -eq 0 ]] || audio_args=(-an)
 duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
+progress_args=()
+[[ "$progress" -eq 0 ]] || progress_args=(-progress pipe:1 -nostats)
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
-command_args=(-hide_banner -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
+command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
     -map 0:v:0 -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate"
     "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
