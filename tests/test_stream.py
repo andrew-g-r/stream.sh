@@ -126,6 +126,9 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--progress'))
         self.assertEqual(args[args.index('-progress')+1],'pipe:1')
         self.assertIn('-nostats',args)
+    def test_loudness_normalization_follows_gain(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--normalize-audio','--volume','-2'))
+        self.assertEqual(args[args.index('-af')+1],'volume=-2dB,loudnorm=I=-16:TP=-1.5:LRA=11')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

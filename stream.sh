@@ -13,6 +13,7 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
       --loop N            Repeat input N times; -1 loops until interrupted
+      --normalize-audio   Apply single-pass EBU R128 loudness normalization
       --mute              Omit audio from the output
       --duration TIME     Stop after this many seconds or HH:MM:SS
   -t, --start-time TIME    Start at seconds or HH:MM:SS (default 0)
@@ -48,6 +49,7 @@ duration=''
 volume='0'
 audio_bitrate=128k
 mute=0
+normalize_audio=0
 loop_count=0
 media_dir='.'
 recursive=0
@@ -75,6 +77,7 @@ while [[ $# -gt 0 ]]; do
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
         --loop) need_value "$1" "${2-}"; loop_count=$2; shift 2 ;;
+        --normalize-audio) normalize_audio=1; shift ;;
         --mute) mute=1; shift ;;
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
         -t|--start-time|--start_time) need_value "$1" "${2-}"; start_time=$2; shift 2 ;;
@@ -211,7 +214,9 @@ case "$output" in
     *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
 esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
-audio_args=(-map '0:a:0?' -af "volume=${volume}dB" -c:a aac -b:a "$audio_bitrate")
+audio_filter="volume=${volume}dB"
+[[ "$normalize_audio" -eq 0 ]] || audio_filter="$audio_filter,loudnorm=I=-16:TP=-1.5:LRA=11"
+audio_args=(-map '0:a:0?' -af "$audio_filter" -c:a aac -b:a "$audio_bitrate")
 [[ "$mute" -eq 0 ]] || audio_args=(-an)
 duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
