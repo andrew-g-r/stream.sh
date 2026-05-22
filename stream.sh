@@ -25,6 +25,7 @@ Usage: stream.sh [options]
       --dry-run           Print the shell-escaped FFmpeg command without running it
       --profile NAME      standard, low-bandwidth, or low-latency
       --preset NAME       x264 encoding preset (default medium)
+      --height N          Scale to an even height while preserving aspect ratio
       --fps N             Frame rate, 1–120 (default 30)
       --bitrate RATE      Video bitrate, e.g. 2500k or 4M
       --output TARGET     RTMP/RTMPS URL or local .flv file (or STREAM_URL)
@@ -54,6 +55,7 @@ loop_count=0
 media_dir='.'
 recursive=0
 fps=30
+height=''
 bitrate=2500k
 preset=medium
 profile=standard
@@ -89,6 +91,7 @@ while [[ $# -gt 0 ]]; do
         --dry-run) dry_run=1; shift ;;
         --profile) need_value "$1" "${2-}"; profile=$2; shift 2 ;;
         --preset) need_value "$1" "${2-}"; preset=$2; shift 2 ;;
+        --height) need_value "$1" "${2-}"; height=$2; shift 2 ;;
         --fps) need_value "$1" "${2-}"; fps=$2; shift 2 ;;
         --bitrate) need_value "$1" "${2-}"; bitrate=$2; shift 2 ;;
         --output) need_value "$1" "${2-}"; output=$2; shift 2 ;;
@@ -130,6 +133,10 @@ valid_time() {
 [[ "$retries" =~ ^(0|[1-9][0-9]?)$ && "$retries" -le 10 ]] || die 'Retries must be 0–10'
 [[ "$retry_delay" =~ ^(0|[1-9][0-9]?)$ && "$retry_delay" -le 60 ]] || die 'Retry delay must be 0–60 seconds'
 case "$log_level" in quiet|error|warning|info|debug) ;; *) die 'Unsupported log level' ;; esac
+if [[ -n "$height" ]]; then
+    [[ "$height" =~ ^[1-9][0-9]{1,3}$ && "$height" -ge 16 && "$height" -le 2160 ]] || die 'Height must be 16–2160'
+    [[ $((height % 2)) -eq 0 ]] || die 'Height must be even for H.264'
+fi
 volume=${volume%dB}
 [[ "$volume" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] || die 'Volume must be a number of decibels'
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
@@ -222,10 +229,12 @@ duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
 progress_args=()
 [[ "$progress" -eq 0 ]] || progress_args=(-progress pipe:1 -nostats)
+scale_args=()
+[[ -z "$height" ]] || scale_args=(-vf "scale=-2:${height}")
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
 command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
-    -map 0:v:0 -sn -dn -pix_fmt yuv420p -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -map 0:v:0 -sn -dn -pix_fmt yuv420p "${scale_args[@]}" -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
     -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate"
     "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then

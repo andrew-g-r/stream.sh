@@ -129,6 +129,10 @@ class StreamTests(unittest.TestCase):
     def test_loudness_normalization_follows_gain(self):
         args=self.arguments(self.run_stream('--file',self.media,'--normalize-audio','--volume','-2'))
         self.assertEqual(args[args.index('-af')+1],'volume=-2dB,loudnorm=I=-16:TP=-1.5:LRA=11')
+    def test_resize_keeps_an_even_width(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--height','720'))
+        self.assertEqual(args[args.index('-vf')+1],'scale=-2:720')
+        self.assertEqual(self.run_stream('--file',self.media,'--height','721').returncode,2)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
