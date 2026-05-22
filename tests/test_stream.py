@@ -133,6 +133,13 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--height','720'))
         self.assertEqual(args[args.index('-vf')+1],'scale=-2:720')
         self.assertEqual(self.run_stream('--file',self.media,'--height','721').returncode,2)
+    def test_video_copy_checks_codec_and_omits_encoder_flags(self):
+        probe=self.bin/'ffprobe';probe.write_text('#!/bin/sh\nprintf "h264\\n"\n');probe.chmod(0o755)
+        args=self.arguments(self.run_stream('--file',self.media,'--copy-video'))
+        self.assertEqual(args[args.index('-c:v')+1],'copy')
+        self.assertNotIn('-preset',args)
+        probe.write_text('#!/bin/sh\nprintf "hevc\\n"\n')
+        self.assertEqual(self.run_stream('--file',self.media,'--copy-video').returncode,2)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

@@ -13,6 +13,7 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
       --loop N            Repeat input N times; -1 loops until interrupted
+      --copy-video        Copy existing H.264 video without re-encoding
       --normalize-audio   Apply single-pass EBU R128 loudness normalization
       --mute              Omit audio from the output
       --duration TIME     Stop after this many seconds or HH:MM:SS
@@ -51,6 +52,7 @@ volume='0'
 audio_bitrate=128k
 mute=0
 normalize_audio=0
+copy_video=0
 loop_count=0
 media_dir='.'
 recursive=0
@@ -79,6 +81,7 @@ while [[ $# -gt 0 ]]; do
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
         --loop) need_value "$1" "${2-}"; loop_count=$2; shift 2 ;;
+        --copy-video) copy_video=1; shift ;;
         --normalize-audio) normalize_audio=1; shift ;;
         --mute) mute=1; shift ;;
         --duration) need_value "$1" "${2-}"; duration=$2; shift 2 ;;
@@ -233,10 +236,18 @@ scale_args=()
 [[ -z "$height" ]] || scale_args=(-vf "scale=-2:${height}")
 tune_args=()
 [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
+video_args=(-pix_fmt yuv420p "${scale_args[@]}" -c:v libx264 -preset "$preset" "${tune_args[@]}"
+    -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate")
+if [[ "$copy_video" -eq 1 ]]; then
+    [[ -z "$height" && "$profile" == standard ]] || die 'Copy mode cannot resize or apply an encoding profile'
+    command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --copy-video'
+    codec=$("$ffprobe_bin" -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$file") || die 'Cannot inspect video codec'
+    [[ "$codec" == h264 ]] || die 'Copy mode requires an H.264 video stream'
+    video_args=(-c:v copy)
+fi
 command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
-    -map 0:v:0 -sn -dn -pix_fmt yuv420p "${scale_args[@]}" -c:v libx264 -preset "$preset" "${tune_args[@]}" -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
-    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate"
-    "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
+    -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
     printf '\n'
