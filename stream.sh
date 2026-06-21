@@ -13,6 +13,7 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
       --loop N            Repeat input N times; -1 loops until interrupted
+      --overwrite         Explicitly replace an existing local output file
       --copy-video        Copy existing H.264 video without re-encoding
       --normalize-audio   Apply single-pass EBU R128 loudness normalization
       --mute              Omit audio from the output
@@ -53,6 +54,7 @@ audio_bitrate=128k
 mute=0
 normalize_audio=0
 copy_video=0
+overwrite=0
 loop_count=0
 media_dir='.'
 recursive=0
@@ -81,6 +83,7 @@ while [[ $# -gt 0 ]]; do
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
         --loop) need_value "$1" "${2-}"; loop_count=$2; shift 2 ;;
+        --overwrite) overwrite=1; shift ;;
         --copy-video) copy_video=1; shift ;;
         --normalize-audio) normalize_audio=1; shift ;;
         --mute) mute=1; shift ;;
@@ -246,7 +249,9 @@ if [[ "$copy_video" -eq 1 ]]; then
     [[ "$codec" == h264 ]] || die 'Copy mode requires an H.264 video stream'
     video_args=(-c:v copy)
 fi
-command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin -n -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
+overwrite_arg=-n
+[[ "$overwrite" -eq 0 ]] || overwrite_arg=-y
+command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin "$overwrite_arg" -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
     -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
 if [[ "$dry_run" -eq 1 ]]; then
     printf '%q ' "$ffmpeg_bin" "${command_args[@]}"

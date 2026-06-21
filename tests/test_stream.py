@@ -140,6 +140,12 @@ class StreamTests(unittest.TestCase):
         self.assertNotIn('-preset',args)
         probe.write_text('#!/bin/sh\nprintf "hevc\\n"\n')
         self.assertEqual(self.run_stream('--file',self.media,'--copy-video').returncode,2)
+    def test_overwrite_requires_explicit_flag(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--output','preview.flv'))
+        self.assertIn('-n',args)
+        args=self.arguments(self.run_stream('--file',self.media,'--output','preview.flv','--overwrite'))
+        self.assertIn('-y',args)
+        self.assertNotIn('-n',args)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
