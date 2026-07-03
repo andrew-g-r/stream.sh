@@ -146,6 +146,13 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--output','preview.flv','--overwrite'))
         self.assertIn('-y',args)
         self.assertNotIn('-n',args)
+    def test_playlist_can_continue_but_preserves_failure_status(self):
+        second=self.root/'second.mp4';second.touch()
+        playlist=self.root/'shows.m3u';playlist.write_text('a movie.mp4\nsecond.mp4\n')
+        fake=self.bin/'ffmpeg';fake.write_text('#!/bin/sh\nprintf "attempt\\n"\nexit 7\n');fake.chmod(0o755)
+        result=self.run_stream('--playlist',playlist,'--continue-on-error')
+        self.assertEqual(result.returncode,7)
+        self.assertEqual(len(result.stdout.splitlines()),2)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

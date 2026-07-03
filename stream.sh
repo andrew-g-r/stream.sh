@@ -13,6 +13,7 @@ Usage: stream.sh [options]
   -s, --search TEXT        Filter the interactive file picker
       --audio-bitrate RATE  AAC bitrate (default 128k)
       --loop N            Repeat input N times; -1 loops until interrupted
+      --continue-on-error Continue playlists after exhausted retries; still exit nonzero
       --overwrite         Explicitly replace an existing local output file
       --copy-video        Copy existing H.264 video without re-encoding
       --normalize-audio   Apply single-pass EBU R128 loudness normalization
@@ -55,6 +56,8 @@ mute=0
 normalize_audio=0
 copy_video=0
 overwrite=0
+continue_on_error=0
+playlist_result=0
 loop_count=0
 media_dir='.'
 recursive=0
@@ -83,6 +86,7 @@ while [[ $# -gt 0 ]]; do
         -s|--search) need_value "$1" "${2-}"; search=$2; shift 2 ;;
         --audio-bitrate) need_value "$1" "${2-}"; audio_bitrate=$2; shift 2 ;;
         --loop) need_value "$1" "${2-}"; loop_count=$2; shift 2 ;;
+        --continue-on-error) continue_on_error=1; shift ;;
         --overwrite) overwrite=1; shift ;;
         --copy-video) copy_video=1; shift ;;
         --normalize-audio) normalize_audio=1; shift ;;
@@ -274,9 +278,15 @@ while true; do
     "$ffmpeg_bin" "${command_args[@]}" &
     child=$!
     if wait "$child"; then child=''; break; else result=$?; child=''; fi
-    [[ "$attempt" -lt "$retries" ]] || exit "$result"
+    if [[ "$attempt" -ge "$retries" ]]; then
+        [[ "$continue_on_error" -eq 1 ]] || exit "$result"
+        playlist_result=$result
+        break
+    fi
     attempt=$((attempt+1))
     printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
     sleep "$retry_delay"
 done
 done
+
+exit "$playlist_result"
