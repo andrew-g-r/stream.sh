@@ -35,6 +35,7 @@ Usage: stream.sh [options]
       --list              List matching media without streaming
       --null              Separate --list results with NUL for scripts
       --directory PATH    Browse this directory (default current directory)
+      --include-hidden    Include hidden files and directories in discovery
       --recursive         Include subdirectories, without following symlinks
   -h, --help               Show this help
 HELP
@@ -61,6 +62,7 @@ playlist_result=0
 loop_count=0
 media_dir='.'
 recursive=0
+include_hidden=0
 fps=30
 height=''
 bitrate=2500k
@@ -108,6 +110,7 @@ while [[ $# -gt 0 ]]; do
         --list) list_only=1; shift ;;
         --null) null_output=1; shift ;;
         --directory) need_value "$1" "${2-}"; media_dir=$2; shift 2 ;;
+        --include-hidden) include_hidden=1; shift ;;
         --recursive) recursive=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; [[ $# -eq 1 ]] || die 'Expected one file after --'; file=$1; shift ;;
@@ -152,6 +155,7 @@ volume=${volume%dB}
 awk -v value="$volume" 'BEGIN{exit !(value>=-60 && value<=30)}' || die 'Volume must be between -60 and +30 dB'
 [[ -z "$duration" ]] || valid_time "$duration" || die 'Duration must be nonnegative seconds or HH:MM:SS'
 valid_time "$start_time" || die 'Start time must be nonnegative seconds or HH:MM:SS'
+[[ "$include_hidden" -eq 0 ]] || shopt -s dotglob
 files=()
 collect_files() {
     local directory=${1:-$media_dir} candidate
