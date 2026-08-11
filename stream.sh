@@ -237,7 +237,7 @@ esac
 command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
 audio_filter="volume=${volume}dB"
 [[ "$normalize_audio" -eq 0 ]] || audio_filter="$audio_filter,loudnorm=I=-16:TP=-1.5:LRA=11"
-audio_args=(-map '0:a:0?' -af "$audio_filter" -c:a aac -b:a "$audio_bitrate")
+audio_args=(-map '0:a:0?' -af "$audio_filter" -c:a aac -b:a "$audio_bitrate" -ar 48000)
 [[ "$mute" -eq 0 ]] || audio_args=(-an)
 duration_args=()
 [[ -z "$duration" ]] || duration_args=(-t "$duration")
