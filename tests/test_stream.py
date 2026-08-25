@@ -157,6 +157,10 @@ class StreamTests(unittest.TestCase):
         hidden=self.root/'.hidden.mp4';hidden.touch()
         self.assertNotIn('.hidden.mp4',self.run_stream('--list').stdout)
         self.assertIn('.hidden.mp4',self.run_stream('--list','--include-hidden').stdout)
+    def test_explicit_options_override_profile_defaults(self):
+        args=self.arguments(self.run_stream('--file',self.media,'--profile','low-bandwidth','--fps','30','--bitrate','1800k'))
+        self.assertEqual(args[args.index('-r')+1],'30')
+        self.assertEqual(args[args.index('-b:v')+1],'1800k')
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

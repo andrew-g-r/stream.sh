@@ -68,6 +68,9 @@ height=''
 bitrate=2500k
 preset=medium
 profile=standard
+bitrate_set=0
+fps_set=0
+preset_set=0
 list_only=0
 dry_run=0
 ffmpeg_bin=${FFMPEG_BIN:-ffmpeg}
@@ -102,10 +105,10 @@ while [[ $# -gt 0 ]]; do
         --probe) probe_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
         --profile) need_value "$1" "${2-}"; profile=$2; shift 2 ;;
-        --preset) need_value "$1" "${2-}"; preset=$2; shift 2 ;;
+        --preset) need_value "$1" "${2-}"; preset=$2; preset_set=1; shift 2 ;;
         --height) need_value "$1" "${2-}"; height=$2; shift 2 ;;
-        --fps) need_value "$1" "${2-}"; fps=$2; shift 2 ;;
-        --bitrate) need_value "$1" "${2-}"; bitrate=$2; shift 2 ;;
+        --fps) need_value "$1" "${2-}"; fps=$2; fps_set=1; shift 2 ;;
+        --bitrate) need_value "$1" "${2-}"; bitrate=$2; bitrate_set=1; shift 2 ;;
         --output) need_value "$1" "${2-}"; output=$2; shift 2 ;;
         --list) list_only=1; shift ;;
         --null) null_output=1; shift ;;
@@ -131,8 +134,11 @@ if [[ "$doctor" -eq 1 ]]; then
 fi
 case "$profile" in
     standard) ;;
-    low-bandwidth) bitrate=900k; fps=24 ;;
-    low-latency) preset=veryfast ;;
+    low-bandwidth)
+        [[ "$bitrate_set" -eq 1 ]] || bitrate=900k
+        [[ "$fps_set" -eq 1 ]] || fps=24
+        ;;
+    low-latency) [[ "$preset_set" -eq 1 ]] || preset=veryfast ;;
     *) die 'Profile must be standard, low-bandwidth, or low-latency' ;;
 esac
 case "$preset" in ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow) ;; *) die 'Unknown x264 preset' ;; esac
