@@ -161,6 +161,15 @@ class StreamTests(unittest.TestCase):
         args=self.arguments(self.run_stream('--file',self.media,'--profile','low-bandwidth','--fps','30','--bitrate','1800k'))
         self.assertEqual(args[args.index('-r')+1],'30')
         self.assertEqual(args[args.index('-b:v')+1],'1800k')
+    def test_leading_dash_and_newline_filenames_are_preserved(self):
+        name='-clip\npart.mp4';path=self.root/name;path.touch()
+        args=self.arguments(self.run_stream('--file',name))
+        self.assertEqual(Path(args[args.index('-i')+1]).name,name)
+        self.assertEqual(Path(args[args.index('-i')+1]).resolve(),path.resolve())
+    def test_playlist_cannot_overwrite_a_single_local_output(self):
+        playlist=self.root/'shows.m3u';playlist.write_text('a movie.mp4\na movie.mp4\n')
+        result=self.run_stream('--playlist',playlist,'--output','one.flv','--overwrite')
+        self.assertEqual(result.returncode,2)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)

@@ -218,6 +218,9 @@ else
     done
     files=("$file")
 fi
+if [[ ${#files[@]} -gt 1 && "$output" != rtmp://* && "$output" != rtmps://* && "$probe_only" -eq 0 ]]; then
+    die 'Multiple playlist entries require an RTMP target; local output would overwrite earlier entries'
+fi
 [[ "$loop_count" != -1 || ${#files[@]} -eq 1 ]] || die 'An infinite loop cannot advance through a playlist'
 if [[ "$shuffle" -eq 1 ]]; then
     for ((i=${#files[@]}-1;i>0;i--)); do
@@ -229,7 +232,7 @@ if [[ "$shuffle" -eq 1 ]]; then
 fi
 for file in "${files[@]}"; do
 [[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
-file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+[[ "$file" == /* ]] || file="$PWD/$file"
 if [[ "$probe_only" -eq 1 ]]; then
     command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --probe'
     "$ffprobe_bin" -v error -show_format -show_streams -of json "$file"
@@ -295,7 +298,10 @@ while true; do
     fi
     attempt=$((attempt+1))
     printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
-    sleep "$retry_delay"
+    sleep "$retry_delay" &
+    child=$!
+    wait "$child" || true
+    child=''
 done
 done
 
