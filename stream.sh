@@ -145,7 +145,7 @@ case "$preset" in ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|ve
 valid_time() {
     [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ || "$1" =~ ^[0-9]+:[0-5][0-9]:[0-5][0-9]([.][0-9]+)?$ ]]
 }
-[[ "$fps" =~ ^[1-9][0-9]*$ && "$fps" -le 120 ]] || die 'FPS must be an integer from 1 to 120'
+[[ "$fps" =~ ^[1-9][0-9]{0,2}$ && "$fps" -le 120 ]] || die 'FPS must be an integer from 1 to 120'
 [[ "$bitrate" =~ ^[1-9][0-9]{0,5}[kKmM]$ ]] || die 'Bitrate must be a positive number followed by k or M'
 [[ "$audio_bitrate" =~ ^[1-9][0-9]{0,3}k$ ]] || die 'Audio bitrate must be a positive integer followed by k'
 [[ "$loop_count" == -1 || "$loop_count" =~ ^[0-9]{1,6}$ ]] || die 'Loop count must be -1 or a nonnegative integer up to 999999'
@@ -226,83 +226,85 @@ if [[ "$shuffle" -eq 1 ]]; then
     for ((i=${#files[@]}-1;i>0;i--)); do
         j=$((RANDOM % (i+1)))
         temporary=${files[$i]}
-        files[$i]=${files[$j]}
-        files[$j]=$temporary
+        files[i]=${files[j]}
+        files[j]=$temporary
     done
 fi
 for file in "${files[@]}"; do
-[[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
-[[ "$file" == /* ]] || file="$PWD/$file"
-if [[ "$probe_only" -eq 1 ]]; then
-    command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --probe'
-    "$ffprobe_bin" -v error -show_format -show_streams -of json "$file"
-    continue
-fi
-case "$output" in
-    rtmp://*|rtmps://*) [[ "$output" != *$'\n'* && "$output" != *$'\r'* ]] || die 'Output URL contains a newline' ;;
-    *.flv) [[ "$output" != -* && "$output" != *://* ]] || die 'Unsupported output target' ;;
-    *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
-esac
-command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
-audio_filter="volume=${volume}dB"
-[[ "$normalize_audio" -eq 0 ]] || audio_filter="$audio_filter,loudnorm=I=-16:TP=-1.5:LRA=11"
-audio_args=(-map '0:a:0?' -af "$audio_filter" -c:a aac -b:a "$audio_bitrate" -ar 48000)
-[[ "$mute" -eq 0 ]] || audio_args=(-an)
-duration_args=()
-[[ -z "$duration" ]] || duration_args=(-t "$duration")
-progress_args=()
-[[ "$progress" -eq 0 ]] || progress_args=(-progress pipe:1 -nostats)
-scale_args=()
-[[ -z "$height" ]] || scale_args=(-vf "scale=-2:${height}")
-tune_args=()
-[[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
-video_args=(-pix_fmt yuv420p "${scale_args[@]}" -c:v libx264 -preset "$preset" "${tune_args[@]}"
-    -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
-    -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate")
-if [[ "$copy_video" -eq 1 ]]; then
-    [[ -z "$height" && "$profile" == standard ]] || die 'Copy mode cannot resize or apply an encoding profile'
-    command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --copy-video'
-    codec=$("$ffprobe_bin" -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$file") || die 'Cannot inspect video codec'
-    [[ "$codec" == h264 ]] || die 'Copy mode requires an H.264 video stream'
-    video_args=(-c:v copy)
-fi
-overwrite_arg=-n
-[[ "$overwrite" -eq 0 ]] || overwrite_arg=-y
-command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin "$overwrite_arg" -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
-    -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
-if [[ "$dry_run" -eq 1 ]]; then
-    printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
-    printf '\n'
-    continue
-fi
-child=''
-stop_stream() {
-    trap - INT TERM
-    if [[ -n "$child" ]]; then
-        kill -TERM "$child" 2>/dev/null || true
-        wait "$child" 2>/dev/null || true
+    [[ -n "$file" && -f "$file" && -r "$file" ]] || die 'Input must be a readable local file'
+    [[ "$file" == /* ]] || file="$PWD/$file"
+    if [[ "$probe_only" -eq 1 ]]; then
+        command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --probe'
+        "$ffprobe_bin" -v error -show_format -show_streams -of json "$file"
+        continue
     fi
-    exit "$1"
-}
-trap 'stop_stream 130' INT
-trap 'stop_stream 143' TERM
-attempt=0
-while true; do
-    "$ffmpeg_bin" "${command_args[@]}" &
-    child=$!
-    if wait "$child"; then child=''; break; else result=$?; child=''; fi
-    if [[ "$attempt" -ge "$retries" ]]; then
-        [[ "$continue_on_error" -eq 1 ]] || exit "$result"
-        playlist_result=$result
-        break
+    case "$output" in
+        rtmp://*|rtmps://*) [[ "$output" != *$'\n'* && "$output" != *$'\r'* ]] || die 'Output URL contains a newline' ;;
+        *.flv) [[ "$output" != -* && "$output" != *://* ]] || die 'Unsupported output target' ;;
+        *) die 'Output must be an RTMP/RTMPS URL or a local .flv file' ;;
+    esac
+    command -v "$ffmpeg_bin" >/dev/null 2>&1 || die 'FFmpeg is required; install it and try again'
+    audio_filter="volume=${volume}dB"
+    [[ "$normalize_audio" -eq 0 ]] || audio_filter="$audio_filter,loudnorm=I=-16:TP=-1.5:LRA=11"
+    audio_args=(-map '0:a:0?' -af "$audio_filter" -c:a aac -b:a "$audio_bitrate" -ar 48000)
+    [[ "$mute" -eq 0 ]] || audio_args=(-an)
+    duration_args=()
+    [[ -z "$duration" ]] || duration_args=(-t "$duration")
+    progress_args=()
+    [[ "$progress" -eq 0 ]] || progress_args=(-progress pipe:1 -nostats)
+    scale_args=()
+    [[ -z "$height" ]] || scale_args=(-vf "scale=-2:${height}")
+    tune_args=()
+    [[ "$profile" != low-latency ]] || tune_args=(-tune zerolatency)
+    video_args=(-pix_fmt yuv420p "${scale_args[@]}" -c:v libx264 -preset "$preset" "${tune_args[@]}"
+        -r "$fps" -g "$((fps*2))" -keyint_min "$((fps*2))" -sc_threshold 0
+        -b:v "$bitrate" -maxrate "$bitrate" -bufsize "$bitrate")
+    if [[ "$copy_video" -eq 1 ]]; then
+        [[ -z "$height" && "$profile" == standard ]] || die 'Copy mode cannot resize or apply an encoding profile'
+        command -v "$ffprobe_bin" >/dev/null 2>&1 || die 'FFprobe is required for --copy-video'
+        codec=$("$ffprobe_bin" -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$file") || die 'Cannot inspect video codec'
+        [[ "$codec" == h264 ]] || die 'Copy mode requires an H.264 video stream'
+        video_args=(-c:v copy)
     fi
-    attempt=$((attempt+1))
-    printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
-    sleep "$retry_delay" &
-    child=$!
-    wait "$child" || true
+    overwrite_arg=-n
+    [[ "$overwrite" -eq 0 ]] || overwrite_arg=-y
+    command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin "$overwrite_arg" -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
+        -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
+    if [[ "$dry_run" -eq 1 ]]; then
+        printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
+        printf '\n'
+        continue
+    fi
     child=''
-done
+    # Called by the INT and TERM trap strings below.
+    # shellcheck disable=SC2329
+    stop_stream() {
+        trap - INT TERM
+        if [[ -n "$child" ]]; then
+            kill -TERM "$child" 2>/dev/null || true
+            wait "$child" 2>/dev/null || true
+        fi
+        exit "$1"
+    }
+    trap 'stop_stream 130' INT
+    trap 'stop_stream 143' TERM
+    attempt=0
+    while true; do
+        "$ffmpeg_bin" "${command_args[@]}" &
+        child=$!
+        if wait "$child"; then child=''; break; else result=$?; child=''; fi
+        if [[ "$attempt" -ge "$retries" ]]; then
+            [[ "$continue_on_error" -eq 1 ]] || exit "$result"
+            playlist_result=$result
+            break
+        fi
+        attempt=$((attempt+1))
+        printf 'Stream failed; retry %s/%s in %s seconds.\n' "$attempt" "$retries" "$retry_delay" >&2
+        sleep "$retry_delay" &
+        child=$!
+        wait "$child" || true
+        child=''
+    done
 done
 
 exit "$playlist_result"
