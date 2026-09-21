@@ -266,10 +266,12 @@ for file in "${files[@]}"; do
         [[ "$codec" == h264 ]] || die 'Copy mode requires an H.264 video stream'
         video_args=(-c:v copy)
     fi
+    muxer_args=()
+    case "$output" in rtmp://*|rtmps://*) muxer_args=(-flvflags no_duration_filesize) ;; esac
     overwrite_arg=-n
     [[ "$overwrite" -eq 0 ]] || overwrite_arg=-y
     command_args=(-hide_banner -loglevel "$log_level" "${progress_args[@]}" -nostdin "$overwrite_arg" -stream_loop "$loop_count" -re -ss "$start_time" -i "$file"
-        -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" -f flv "$output")
+        -map 0:v:0 -sn -dn "${video_args[@]}" "${audio_args[@]}" "${duration_args[@]}" "${muxer_args[@]}" -f flv "$output")
     if [[ "$dry_run" -eq 1 ]]; then
         printf '%q ' "$ffmpeg_bin" "${command_args[@]}"
         printf '\n'

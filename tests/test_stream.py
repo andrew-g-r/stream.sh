@@ -170,6 +170,11 @@ class StreamTests(unittest.TestCase):
         playlist=self.root/'shows.m3u';playlist.write_text('a movie.mp4\na movie.mp4\n')
         result=self.run_stream('--playlist',playlist,'--output','one.flv','--overwrite')
         self.assertEqual(result.returncode,2)
+    def test_live_outputs_do_not_require_seekable_headers(self):
+        args=self.arguments(self.run_stream('--file',self.media))
+        self.assertEqual(args[args.index('-flvflags')+1],'no_duration_filesize')
+        args=self.arguments(self.run_stream('--file',self.media,'--output','out.flv'))
+        self.assertNotIn('-flvflags',args)
     def test_help_and_unknown_option(self):
         self.assertEqual(self.run_stream('--help').returncode,0)
         self.assertEqual(self.run_stream('--typo').returncode,2)
