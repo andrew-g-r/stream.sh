@@ -76,6 +76,6 @@ bash -n stream.sh
 python3 -m unittest discover -s tests -v
 ```
 
-Python is used only for tests. Unit tests mock FFmpeg and check exact arguments, playlists, failures, and signal handling. When FFmpeg/FFprobe are installed, smoke tests generate tiny videos and verify real H.264/AAC output, normalization, scaling, and silent video. CI checks macOS and Linux.
+Python is used only for tests. Unit tests mock FFmpeg and check exact arguments, playlists, failures, and signal handling. When FFmpeg/FFprobe are installed, smoke tests generate tiny videos and verify real H.264/AAC output, normalization, scaling, silent video, and a real localhost RTMP transfer. CI checks macOS and Linux.
 
 Author: Andrew Russell.
